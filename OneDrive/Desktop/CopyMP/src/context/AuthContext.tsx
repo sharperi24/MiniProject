@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface User {
-  id: string;
+  _id: string;
   username: string;
   email: string;
 }
@@ -27,38 +28,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const API_URL = '/api/auth'; // Updated API URL
 
+  // Add a function to check token expiration
+  const isTokenExpired = (token: string) => {
+    try {
+      const decoded = JSON.parse(atob(token.split('.')[1]));
+      return decoded.exp * 1000 < Date.now();
+    } catch {
+      return true;
+    }
+  };
+
   useEffect(() => {
-    // Check for stored user data on component mount
+    const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('token');
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
+    
+    if (token && storedUser) {
+      if (isTokenExpired(token)) {
+        // Token is expired, log out user
+        console.log('Token expired, logging out');
+        logout();
+      } else {
+        setUser(JSON.parse(storedUser));
+      }
     }
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Login failed');
-      }
-
-      const data = await response.json();
+      const response = await axios.post('/api/auth/login', { email, password });
+      const { token, user } = response.data;
       
-      // Save user data and token
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('token', data.token);
-      setUser(data.user);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      console.log('Token stored:', token);
+      console.log('User stored:', user);
       
-      console.log('Login successful:', data.user);
+      setUser(user);
+      
+      return response.data;
     } catch (error) {
       console.error('Login error:', error);
       throw error;

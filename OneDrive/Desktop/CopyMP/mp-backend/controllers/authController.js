@@ -79,18 +79,20 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Generate token
     const token = jwt.sign(
-      { id: user._id },
+      { id: user._id.toString() },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }
     );
 
-    console.log('Login successful:', user._id);
+    console.log('Login successful. User ID:', user._id);
+    console.log('Token generated:', token);
 
     res.status(200).json({
       token,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         username: user.username,
         email: user.email
       }

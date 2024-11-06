@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
+import journalRoutes from './routes/journalRoutes.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -23,6 +24,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/journal', journalRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
