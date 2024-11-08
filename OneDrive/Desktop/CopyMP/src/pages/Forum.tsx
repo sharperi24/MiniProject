@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { Filter, Clock, ShieldAlert } from 'lucide-react';
 import PostForm from '../components/forum/PostForm';
 import PostCard from '../components/forum/PostCard';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const categories = [
   "Support & Encouragement",
@@ -15,89 +17,186 @@ const categories = [
 ];
 
 interface Post {
-  id: string;
+  _id: string;
   title: string;
   content: string;
-  author: string;
-  date: string;
-  likes: string[];
-  comments: Comment[];
+  author: {
+    _id: string;
+    username: string;
+  };
   category: string;
   tags: string[];
-}
-
-interface Comment {
-  id: string;
-  content: string;
-  author: string;
-  date: string;
   likes: string[];
+  comments: Array<{
+    _id: string;
+    content: string;
+    author: {
+      _id: string;
+      username: string;
+    };
+    date: string;
+  }>;
+  date: string;
 }
 
 const Forum = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>(() => {
-    const saved = localStorage.getItem('forum-posts');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [posts, setPosts] = useState<Post[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [newComment, setNewComment] = useState<{ [key: string]: string }>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    localStorage.setItem('forum-posts', JSON.stringify(posts));
-  }, [posts]);
-
-  const handlePostSubmit = (postData: { title: string; content: string; category: string; tags: string }) => {
-    if (!user) return;
-
-    const post: Post = {
-      id: Date.now().toString(),
-      title: postData.title,
-      content: postData.content,
-      author: user.username,
-      date: new Date().toISOString(),
-      likes: [],
-      comments: [],
-      category: postData.category,
-      tags: postData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+        
+        const response = await axios.get('/api/threads', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        console.log('Fetched posts:', response.data); // Log the response
+        const transformedPosts = response.data.map((post: any) => ({
+          ...post,
+          author: {
+            _id: post.author._id,
+            username: post.author.username
+          }
+        }));
+        setPosts(transformedPosts);
+        console.log('Posts state updated:', transformedPosts); // Log updated state
+      } catch (error: any) {
+        console.error('Error fetching posts:', {
+          error: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          config: error.config
+        });
+        setError(error.response?.data?.message || 'Failed to load posts');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setPosts([post, ...posts]);
-  };
+    fetchPosts();
+  }, []);
 
-  const handleLike = (postId: string) => {
+  const handlePostSubmit = async (postData: { title: string; content: string; category: string; tags: string }) => {
     if (!user) return;
 
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        const likes = post.likes.includes(user.id)
-          ? post.likes.filter(id => id !== user.id)
-          : [...post.likes, user.id];
-        return { ...post, likes };
-      }
-      return post;
-    }));
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/threads', 
+        {
+          title: postData.title,
+          content: postData.content,
+          category: postData.category || 'General Discussion',
+          tags: postData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('New post response:', response.data);
+      setPosts(prevPosts => [response.data, ...prevPosts]);
+      setError(null);
+    } catch (error: any) {
+      console.error('Error creating post:', error);
+      setError(error.response?.data?.message || 'Failed to create post');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleComment = (postId: string, comment: string) => {
+  const handleLike = async (postId: string) => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`/api/threads/${postId}/like`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      setPosts(prevPosts => 
+        prevPosts.map(post => post._id === postId ? response.data : post)
+      );
+      setError(null);
+    } catch (error: any) {
+      console.error('Error liking post:', error);
+      setError(error.response?.data?.message || 'Failed to like post');
+    }
+  };
+
+  const handleComment = async (postId: string, comment: string) => {
     if (!user || !comment.trim()) return;
 
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        const newComment: Comment = {
-          id: Date.now().toString(),
-          content: comment,
-          author: user.username,
-          date: new Date().toISOString(),
-          likes: []
-        };
-        return { ...post, comments: [...post.comments, newComment] };
-      }
-      return post;
-    }));
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/threads/${postId}/comment`, 
+        { content: comment },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      setPosts(prevPosts => 
+        prevPosts.map(post => post._id === postId ? response.data : post)
+      );
+      setNewComment(prev => ({ ...prev, [postId]: '' }));
+      setError(null);
+    } catch (error: any) {
+      console.error('Error commenting on post:', error);
+      setError(error.response?.data?.message || 'Failed to add comment');
+    }
+  };
 
-    setNewComment({ ...newComment, [postId]: '' });
+  const handleReply = async (postId: string, commentId: string, content: string) => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `/api/threads/${postId}/comments/${commentId}/reply`,
+        { content },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      setPosts(prevPosts => 
+        prevPosts.map(post => post._id === postId ? response.data : post)
+      );
+    } catch (error: any) {
+      console.error('Error replying to comment:', error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else {
+        setError(error.response?.data?.message || 'Failed to add reply');
+      }
+    }
   };
 
   const filteredPosts = posts
@@ -108,6 +207,21 @@ const Forum = () => {
       }
       return b.likes.length - a.likes.length;
     });
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+        <strong className="font-bold">Error: </strong>
+        <span className="block sm:inline">{error}</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -152,17 +266,21 @@ const Forum = () => {
       </div>
 
       <div className="space-y-6">
-        {filteredPosts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onLike={handleLike}
-            onComment={handleComment}
-            currentUser={user}
-            newComment={newComment[post.id] || ''}
-            onCommentChange={(id, value) => setNewComment({ ...newComment, [id]: value })}
-          />
-        ))}
+        {filteredPosts.map((post) => {
+          console.log('Post props:', post); // Log each post
+          return (
+            <PostCard
+              key={post._id}
+              post={post}
+              onLike={handleLike}
+              onComment={handleComment}
+              onReply={(commentId, content) => handleReply(post._id, commentId, content)}
+              currentUser={user}
+              newComment={newComment[post._id] || ''}
+              onCommentChange={(id, value) => setNewComment({ ...newComment, [id]: value })}
+            />
+          );
+        })}
       </div>
     </div>
   );

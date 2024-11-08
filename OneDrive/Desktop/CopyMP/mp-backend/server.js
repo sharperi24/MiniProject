@@ -3,6 +3,7 @@ import cors from 'cors';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import journalRoutes from './routes/journalRoutes.js';
+import threadRoutes from './routes/threadRoutes.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -16,15 +17,25 @@ connectDB();
 // Middleware
 app.use(cors({
   origin: 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 app.use(express.json());
+
+// Add this before your routes
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  console.log('Request body:', req.body);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/journal', journalRoutes);
+app.use('/api/threads', threadRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {

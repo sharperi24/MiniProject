@@ -4,46 +4,33 @@ import User from '../models/User.js';
 export const protect = async (req, res, next) => {
   try {
     let token;
-    console.log('Auth Headers:', req.headers.authorization);
-
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
-    ) {
+    
+    if (req.headers.authorization?.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+      console.log('Processing token:', token.substring(0, 10) + '...');
+      
       try {
-        token = req.headers.authorization.split(' ')[1];
-        console.log('Token extracted:', token);
-        console.log('JWT_SECRET:', process.env.JWT_SECRET);
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log('Decoded token:', decoded);
-
         const user = await User.findById(decoded.id).select('-password');
-        console.log('Found user:', user);
         
         if (!user) {
-          throw new Error('User not found');
+          console.log('User not found for token');
+          return res.status(401).json({ message: 'User not found' });
         }
-
+        
         req.user = user;
         next();
       } catch (error) {
         console.error('Token verification failed:', error);
-        return res.status(401).json({ 
-          message: 'Not authorized, token failed',
-          error: error.message 
-        });
+        return res.status(401).json({ message: 'Invalid token' });
       }
     } else {
-      console.log('No token provided in headers');
-      return res.status(401).json({ message: 'Not authorized, no token' });
+      console.log('No token provided');
+      return res.status(401).json({ message: 'No token provided' });
     }
   } catch (error) {
     console.error('Auth middleware error:', error);
-    return res.status(500).json({ 
-      message: 'Auth middleware error',
-      error: error.message 
-    });
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
