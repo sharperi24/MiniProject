@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Book, Trash2, Edit2, Save, X } from 'lucide-react';
+import { Book } from 'lucide-react';
 import axios from 'axios';
+import { COLORS } from '../styles/theme';
 
 interface JournalEntry {
   _id: string;
@@ -198,26 +199,26 @@ const Journal = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">My Journal</h1>
+      <h1 className={`text-3xl font-bold mb-8 ${COLORS.textPrimary}`}>My Journal</h1>
       
       {/* Entry Form */}
-      <form onSubmit={handleSubmit} className="mb-8 bg-white p-6 rounded-lg shadow">
+      <form onSubmit={handleSubmit} className={`mb-8 ${COLORS.primary} p-6 rounded-lg shadow`}>
         <input
           type="text"
           value={newEntry.title}
           onChange={(e) => setNewEntry({ ...newEntry, title: e.target.value })}
           placeholder="Entry Title"
-          className="w-full mb-4 p-2 border rounded"
+          className="w-full mb-4 p-2 rounded bg-white dark:bg-gray-700 border dark:border-gray-600 text-gray-900 dark:text-white"
         />
         <textarea
           value={newEntry.content}
           onChange={(e) => setNewEntry({ ...newEntry, content: e.target.value })}
           placeholder="Write your thoughts..."
-          className="w-full mb-4 p-2 border rounded h-32"
+          className="w-full mb-4 p-2 border dark:border-gray-600 rounded h-32 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          className={`px-4 py-2 rounded transition-colors ${COLORS.buttonPrimary}`}
         >
           Add Entry
         </button>
@@ -225,7 +226,7 @@ const Journal = () => {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
@@ -240,77 +241,50 @@ const Journal = () => {
       {/* Entries List */}
       <div className="space-y-6">
         {entries.map((entry) => (
-          <div key={entry._id} className="bg-white p-6 rounded-lg shadow">
+          <div key={entry._id} className={`${COLORS.primary} p-6 rounded-lg shadow`}>
             {editingEntry === entry._id ? (
-              // Edit Form
               <div>
                 <input
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full mb-4 p-2 border rounded"
+                  className="w-full mb-4 p-2 rounded bg-white dark:bg-gray-700"
                 />
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full mb-4 p-2 border rounded h-32"
+                  className="w-full mb-4 p-2 rounded bg-white dark:bg-gray-700"
                 />
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleUpdate(entry._id)}
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingEntry(null)}
-                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <button onClick={() => handleUpdate(entry._id)} className={`px-4 py-2 rounded transition-colors ${COLORS.buttonPrimary}`}>
+                  Save
+                </button>
               </div>
             ) : (
-              // Entry Display
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-xl font-semibold">{entry.title}</h2>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setEditingEntry(entry._id);
-                        setEditTitle(entry.title);
-                        setEditContent(entry.content);
-                      }}
-                      className="text-blue-500 hover:text-blue-600"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(entry._id)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                <p className="text-gray-600 whitespace-pre-wrap">{entry.content}</p>
-                <div className="mt-4 text-sm text-gray-500">
-                  Created: {new Date(entry.date).toLocaleDateString()}
-                  {entry.lastModified && entry.lastModified !== entry.date && (
-                    <span className="ml-4">
-                      Modified: {new Date(entry.lastModified).toLocaleDateString()}
-                    </span>
-                  )}
+              <div className="flex justify-between items-start mb-4">
+                <h2 className={`text-xl font-semibold ${COLORS.textPrimary}`}>{entry.title}</h2>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => startEditing(entry)}
+                    className={`transition-colors bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700 px-4 py-2 rounded`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(entry._id)}
+                    className={`transition-colors bg-red-500 dark:bg-red-600 text-white hover:bg-red-600 dark:hover:bg-red-700 px-4 py-2 rounded`}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             )}
+            <p className={COLORS.textSecondary}>{entry.content}</p>
           </div>
         ))}
 
         {/* No Entries Message */}
         {entries.length === 0 && !isLoading && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             No journal entries yet. Start writing your thoughts above!
           </div>
         )}

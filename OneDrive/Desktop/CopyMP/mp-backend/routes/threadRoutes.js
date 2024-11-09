@@ -1,20 +1,46 @@
 import express from 'express';
-import { createThread, getThreads, likeThread, commentOnThread, addReplyToComment } from '../controllers/threadController.js';
 import { protect } from '../middleware/authMiddleware.js';
+import {
+  getThreads,
+  createThread,
+  deleteThread,
+  likeThread,
+  commentOnThread,
+  addReplyToComment,
+  flagThread,
+  deleteComment
+} from '../controllers/threadController.js';
 
 const router = express.Router();
 
-router.route('/')
-  .post(protect, createThread) // Ensure this route is defined
-  .get(getThreads); // Get all threads
+// Debug middleware - Update to show parsed params
+router.use((req, res, next) => {
+  console.log('Thread Route Hit:', {
+    method: req.method,
+    path: req.path,
+    params: req.params,
+    body: req.body,
+    url: req.originalUrl
+  });
+  next();
+});
 
-router.route('/:id/like')
-  .put(protect, likeThread); // Like a thread
+// Public routes
+router.get('/', getThreads);
 
-router.route('/:id/comment')
-  .post(protect, commentOnThread); // Comment on a thread
-
-router.route('/:threadId/comments/:commentId/reply')
-  .post(protect, addReplyToComment); // Reply to a comment
+// Protected routes
+router.post('/', protect, createThread);
+router.delete('/:id', protect, deleteThread);
+router.put('/:id/like', protect, likeThread);
+router.post('/:id/comment', protect, commentOnThread);
+router.post('/:id/comments/:commentId/reply', protect, addReplyToComment);
+router.post('/:id/flag', protect, flagThread);
+router.delete('/:threadId/comments/:commentId', protect, async (req, res) => {
+  console.log('Delete comment route hit with params:', {
+    threadId: req.params.threadId,
+    commentId: req.params.commentId
+  });
+  await deleteComment(req, res);
+});
 
 export default router;

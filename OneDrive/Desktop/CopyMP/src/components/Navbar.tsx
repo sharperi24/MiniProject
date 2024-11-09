@@ -1,21 +1,22 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { MessageCircle, Book, BookOpen, LogOut, User } from 'lucide-react';
+import { MessageCircle, Book, BookOpen, LogOut, User, Moon, Sun } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   return (
-    <nav className="bg-white shadow-lg">
+    <nav className="bg-white dark:bg-gray-800 shadow-lg transition-colors duration-200">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="text-xl font-bold text-gray-800">
+          <Link to="/" className="text-xl font-bold text-gray-800 dark:text-white">
             DevForum
           </Link>
           
           <div className="flex space-x-4">
-            <Link to="/forum" className="flex items-center text-gray-600 hover:text-gray-900">
+            <Link to="/forum" className="flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
               <MessageCircle className="w-5 h-5 mr-1" />
               Forum
             </Link>
@@ -30,6 +31,18 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center space-x-4">
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              aria-label="Toggle dark mode"
+            >
+              {isDarkMode ? (
+                <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              )}
+            </button>
+            
             {user ? (
               <>
                 <span className="flex items-center text-gray-600">

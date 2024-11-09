@@ -1,10 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Filter, Clock, ShieldAlert } from 'lucide-react';
 import PostForm from '../components/forum/PostForm';
 import PostCard from '../components/forum/PostCard';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+
+// Define the Reply interface
+interface Reply {
+  _id: string;
+  content: string;
+  author: {
+    _id: string;
+    username: string;
+  };
+  date: string;
+}
 
 const categories = [
   "Support & Encouragement",
@@ -16,7 +26,7 @@ const categories = [
   "Success Stories"
 ];
 
-interface Post {
+interface ForumPost {
   _id: string;
   title: string;
   content: string;
@@ -35,19 +45,19 @@ interface Post {
       username: string;
     };
     date: string;
+    replies: Reply[];
   }>;
   date: string;
 }
 
 const Forum = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<ForumPost[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [newComment, setNewComment] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -69,7 +79,11 @@ const Forum = () => {
           author: {
             _id: post.author._id,
             username: post.author.username
-          }
+          },
+          comments: post.comments.map((comment: any) => ({
+            ...comment,
+            replies: comment.replies || []
+          }))
         }));
         setPosts(transformedPosts);
         console.log('Posts state updated:', transformedPosts); // Log updated state
@@ -99,7 +113,7 @@ const Forum = () => {
         {
           title: postData.title,
           content: postData.content,
-          category: postData.category || 'General Discussion',
+          category: postData.category,
           tags: postData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
         },
         {
@@ -110,7 +124,7 @@ const Forum = () => {
         }
       );
       
-      console.log('New post response:', response.data);
+      console.log('New post response:', response.data); // Debug log
       setPosts(prevPosts => [response.data, ...prevPosts]);
       setError(null);
     } catch (error: any) {
@@ -169,13 +183,26 @@ const Forum = () => {
     }
   };
 
-  const handleReply = async (postId: string, commentId: string, content: string) => {
-    if (!user) return;
+  const handleReply = async (commentId: string, content: string) => {
+    if (!user || !content.trim()) return;
+
+    console.log('Replying to comment:', {
+      commentId,
+      content,
+      postId: posts.find(p => p.comments.some(c => c._id === commentId))?._id
+    });
 
     try {
       const token = localStorage.getItem('token');
+      const post = posts.find(p => p.comments.some(c => c._id === commentId));
+
+      if (!post) {
+        console.error('Post not found for comment:', commentId);
+        return;
+      }
+
       const response = await axios.post(
-        `/api/threads/${postId}/comments/${commentId}/reply`,
+        `/api/threads/${post._id}/comments/${commentId}/reply`,
         { content },
         {
           headers: {
@@ -184,18 +211,81 @@ const Forum = () => {
           }
         }
       );
-      
-      setPosts(prevPosts => 
-        prevPosts.map(post => post._id === postId ? response.data : post)
+
+      console.log('Reply response:', response.data);
+
+      // Update posts state with the new reply
+      setPosts(prevPosts =>
+        prevPosts.map(p => p._id === post._id ? response.data : p)
       );
     } catch (error: any) {
-      console.error('Error replying to comment:', error);
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/login');
-      } else {
-        setError(error.response?.data?.message || 'Failed to add reply');
+      console.error('Error replying to comment:', error.response || error);
+      setError(error.response?.data?.message || 'Failed to add reply');
+    }
+  };
+
+  const handleDeleteThread = async (threadId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Authentication required');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this thread?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/threads/${threadId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Thread deleted successfully');
+      // Update the state to remove the deleted thread
+      setPosts(prevPosts => prevPosts.filter(post => post._id !== threadId));
+    } catch (error: any) {
+      console.error('Error deleting thread:', error);
+      alert(error.response?.data?.message || 'Failed to delete thread');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Authentication required');
+      return;
+    }
+
+    try {
+      const post = posts.find(p => p.comments.some(c => c._id === commentId));
+      if (!post) {
+        console.error('Post not found for comment:', commentId);
+        return;
       }
+
+      console.log('Deleting comment:', {
+        postId: post._id,
+        commentId: commentId
+      });
+
+      const response = await axios.delete(`/api/threads/${post._id}/comments/${commentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      // Update the posts state with the updated thread from response
+      setPosts(prevPosts => 
+        prevPosts.map(p => p._id === post._id ? response.data : p)
+      );
+
+      console.log('Comment deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting comment:', error);
+      alert(error.response?.data?.message || 'Failed to delete comment');
     }
   };
 
@@ -225,10 +315,10 @@ const Forum = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-8 rounded-lg shadow-md mb-8">
+      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-forumText p-8 rounded-lg shadow-md mb-8">
         <div className="flex items-center mb-4">
-          <ShieldAlert className="w-8 h-8 mr-3" />
-          <h1 className="text-2xl font-bold">Safe Space Community</h1>
+          <ShieldAlert className="w-8 h-8 mr-3 text-forumText" />
+          <h1 className="text-2xl font-bold text-forumText">Safe Space Community</h1>
         </div>
         <p className="text-blue-100">
           Welcome to our supportive community. This is a space where you can share, connect, and grow together.
@@ -238,13 +328,13 @@ const Forum = () => {
 
       {user && <PostForm onSubmit={handlePostSubmit} categories={categories} />}
 
-      <div className="mb-6 flex items-center justify-between bg-white p-4 rounded-lg shadow-md">
+      <div className="mb-6 flex items-center justify-between bg-white dark:bg-forumBackground p-4 rounded-lg shadow-md">
         <div className="flex items-center space-x-4">
-          <Filter className="w-5 h-5 text-gray-500" />
+          <Filter className="w-5 h-5 text-gray-500 dark:text-gray-300" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="border rounded-md p-2"
+            className="border rounded-md p-2 dark:bg-gray-700 dark:text-forumText"
           >
             <option value="all">All Categories</option>
             {categories.map(category => (
@@ -257,7 +347,7 @@ const Forum = () => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
-            className="border rounded-md p-2"
+            className="border rounded-md p-2 dark:bg-gray-700 dark:text-forumText"
           >
             <option value="latest">Latest</option>
             <option value="popular">Most Supported</option>
@@ -272,12 +362,16 @@ const Forum = () => {
             <PostCard
               key={post._id}
               post={post}
+              posts={posts}
+              setPostsState={setPosts}
               onLike={handleLike}
               onComment={handleComment}
-              onReply={(commentId, content) => handleReply(post._id, commentId, content)}
+              onReply={handleReply}
               currentUser={user}
               newComment={newComment[post._id] || ''}
               onCommentChange={(id, value) => setNewComment({ ...newComment, [id]: value })}
+              onDelete={() => handleDeleteThread(post._id)}
+              onDeleteComment={(commentId) => handleDeleteComment(commentId)}
             />
           );
         })}
